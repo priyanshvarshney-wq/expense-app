@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Travel Expense</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system;background:#f2f4f7;}
+.container{max-width:500px;margin:auto;padding:16px;padding-bottom:100px;}
+
+.card{
+ background:white;border-radius:16px;padding:16px;margin-bottom:16px;
+ box-shadow:0 4px 12px rgba(0,0,0,0.06);
+}
+
+input,select{
+ width:100%;height:52px;margin-top:12px;
+ padding:0 14px;border-radius:12px;border:1px solid #ddd;
+}
+input[type=file]{padding:10px;height:auto;background:#f7f8fa;}
+
+button{
+ width:100%;height:52px;margin-top:12px;
+ border:none;border-radius:12px;background:#007AFF;color:white;font-weight:600;
+}
+
+.nav{
+ position:fixed;bottom:0;width:100%;max-width:500px;
+ left:50%;transform:translateX(-50%);
+ display:flex;background:white;border-top:1px solid #eee;
+}
+.nav button{flex:1;background:none;color:#007AFF;}
+.nav .active{font-weight:700;border-top:3px solid #007AFF;}
+
+.hidden{display:none;}
+
+.hero{text-align:center;font-size:28px;font-weight:800;margin-bottom:10px;}
+
+.summary-title{
+ text-align:center;font-size:18px;font-weight:700;color:#222;margin-bottom:6px;
+}
+.summary-amount{
+ text-align:center;font-size:44px;font-weight:800;margin-top:6px;
+}
+
+#monthLabel{
+ text-align:center;font-size:18px;font-weight:700;margin:10px 0 6px;
+}
+
+.list-header{display:flex;justify-content:flex-end;margin-top:10px;}
+
+.swipe-container{position:relative;margin-top:10px;overflow:hidden;}
+.swipe-content{
+ background:#f7f8fa;padding:14px;border-radius:12px;
+ display:flex;justify-content:space-between;align-items:center;
+ transition:transform 0.3s ease;
+}
+.delete-btn{
+ position:absolute;right:0;top:0;bottom:0;width:80px;
+ background:#ff3b30;color:white;
+ display:flex;align-items:center;justify-content:center;
+}
+
+.legend-item{display:flex;justify-content:space-between;margin-top:8px;}
+.legend-left{display:flex;align-items:center;gap:8px;}
+.legend-color{width:10px;height:10px;border-radius:3px;}
+
+#statsTotal{text-align:center;font-size:28px;font-weight:800;margin-bottom:10px;}
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- HOME -->
+
+<div id="home">
+<div class="card">
+<input type="date" id="date">
+<select id="person"></select>
+<input type="text" id="newPerson" placeholder="Add new person">
+<input type="number" id="amount" placeholder="Amount ₹">
+<button id="saveBtn">Save Expense</button>
+</div>
+
+<div class="card">
+<div class="list-header" onclick="toggleList()">
+<span id="arrow">▼</span>
+</div>
+<div id="listWrapper"><div id="list"></div></div>
+</div>
+
+<div class="card">
+<button onclick="exportCSV()">📊 Export Excel</button>
+<button onclick="backup()">📤 Backup</button>
+<input type="file" onchange="importData(event)">
+</div>
+</div>
+
+<!-- STATS -->
+
+<div id="stats" class="hidden">
+<div class="card">
+<div id="statsTotal"></div>
+<input type="month" id="month">
+<canvas id="pie"></canvas>
+<div id="legend"></div>
+</div>
+
+<div class="card">
+<div class="hero">Last 3 Months</div>
+<canvas id="bar"></canvas>
+</div>
+</div>
+
+<!-- OVERALL -->
+
+<div id="overall" class="hidden">
+<div class="card">
+<div class="summary-title">Overall Expense</div>
+<div id="overallTotal" class="summary-amount"></div>
+</div>
+
+<div class="card">
+<input type="month" id="overallMonth">
+<div id="monthLabel"></div>
+<div id="monthTotal" class="summary-amount"></div>
+<div id="overallList"></div>
+</div>
+</div>
+
+</div>
+
+<div class="nav">
+<button onclick="show('home',this)">🏠 Home</button>
+<button onclick="show('stats',this)">📊 Stats</button>
+<button onclick="show('overall',this)">📈 Overall</button>
+</div>
+
+<script>
+let data=JSON.parse(localStorage.getItem("exp")||"[]");
+let people=JSON.parse(localStorage.getItem("people")||"[]");
+
+let editing=null,chart=null,barChart=null;
+const colors=["#007AFF","#34C759","#FF9500","#FF3B30","#AF52DE"];
+
+function saveAll(){
+ localStorage.setItem("exp",JSON.stringify(data));
+ localStorage.setItem("people",JSON.stringify(people));
+}
+
+function animate(el,val,prefix="₹ "){
+ let start=0;
+ let step=val/20;
+ let i=setInterval(()=>{
+  start+=step;
+  if(start>=val){start=val;clearInterval(i);}
+  el.innerText=prefix + Math.round(start);
+ },20);
+}
+
+function formatMonth(m){
+ return new Date(m+"-01").toLocaleString("en-IN",{month:"long",year:"numeric"});
+}
+
+function loadPeople(){
+ person.innerHTML="<option value=''>Select</option>";
+ [...new Set(people.map(p=>p.trim()))].forEach(p=>{
+  let o=document.createElement("option");
+  o.value=p;o.text=p;person.appendChild(o);
+ });
+}
+
+saveBtn.onclick=()=>{
+ let p=(person.value||newPerson.value).trim();
+ let amt=parseFloat(amount.value);
+ if(!p||!amt) return alert("Fill fields");
+
+ if(!people.includes(p)) people.push(p);
+
+ if(editing){
+  let x=data.find(x=>x.id===editing);
+  x.person=p;x.amount=amt;x.date=date.value;
+  editing=null;
+  saveBtn.innerText="Save Expense";
+ }else{
+  data.push({id:Date.now(),person:p,amount:amt,date:date.value});
+ }
+
+ saveAll();
+ newPerson.value="";amount.value="";
+ render();
+};
+
+function render(){
+ let m=new Date().toISOString().slice(0,7);
+ list.innerHTML="";
+
+ data.filter(x=>x.date.startsWith(m)).reverse().forEach(x=>{
+  let c=document.createElement("div");
+  c.className="swipe-container";
+
+  let content=document.createElement("div");
+  content.className="swipe-content";
+  content.innerHTML=`<div>${x.person}<br><small>${x.date}</small></div><div>₹ ${x.amount}</div>`;
+
+  content.onclick=()=>{
+   editing=x.id;
+   date.value=x.date;
+   newPerson.value=x.person;
+   amount.value=x.amount;
+   saveBtn.innerText="Update Expense";
+  };
+
+  let del=document.createElement("div");
+  del.className="delete-btn";
+  del.innerText="Delete";
+  del.onclick=()=>{data=data.filter(d=>d.id!==x.id);saveAll();render();};
+
+  c.appendChild(del);
+  c.appendChild(content);
+
+  let startX=0;
+  c.addEventListener("touchstart",e=>startX=e.touches[0].clientX);
+  c.addEventListener("touchmove",e=>{
+   let move=e.touches[0].clientX;
+   if(startX-move>40) content.style.transform="translateX(-80px)";
+   if(move-startX>40) content.style.transform="translateX(0)";
+  });
+
+  list.appendChild(c);
+ });
+
+ loadPeople();
+}
+
+let expanded=localStorage.getItem("list")!=="closed";
+function toggleList(){
+ expanded=!expanded;
+ localStorage.setItem("list",expanded?"open":"closed");
+ listWrapper.style.display=expanded?"block":"none";
+ arrow.innerText=expanded?"▼":"►";
+}
+toggleList();
+
+/* STATS */
+function loadStats(){
+ let m=month.value;
+ let map={},total=0;
+
+ data.forEach(x=>{
+  if(x.date.startsWith(m)){
+   map[x.person]=(map[x.person]||0)+x.amount;
+   total+=x.amount;
+  }
+ });
+
+ statsTotal.innerText="Amount ₹ 0";
+ animate(statsTotal,total,"Amount ₹ ");
+
+ let labels=Object.keys(map);
+ let values=Object.values(map);
+
+ if(chart) chart.destroy();
+ chart=new Chart(pie,{
+  type:"pie",
+  data:{labels,datasets:[{data:values,backgroundColor:colors}]},
+  options:{plugins:{legend:{display:false}}}
+ });
+
+ legend.innerHTML="";
+ labels.forEach((l,i)=>{
+  let p=((values[i]/total)*100).toFixed(1);
+  legend.innerHTML+=`
+  <div class="legend-item">
+    <div class="legend-left">
+      <div class="legend-color" style="background:${colors[i]}"></div>${l}
+    </div>
+    <div>₹ ${values[i]} (${p}%)</div>
+  </div>`;
+ });
+
+ let months=[],totals=[];
+ for(let i=2;i>=0;i--){
+  let d=new Date();d.setMonth(d.getMonth()-i);
+  let key=d.toISOString().slice(0,7);
+  let sum=0;
+  data.forEach(x=>{if(x.date.startsWith(key)) sum+=x.amount;});
+  months.push(new Date(key+"-01").toLocaleString("en-IN",{month:"short",year:"numeric"}));
+  totals.push(sum);
+ }
+
+ if(barChart) barChart.destroy();
+ barChart=new Chart(document.getElementById("bar"),{
+  type:"bar",
+  data:{
+    labels:months,
+    datasets:[{
+      label:"Monthly Spend",
+      data:totals,
+      backgroundColor:"#007AFF"
+    }]
+  }
+ });
+}
+
+month.addEventListener("change",loadStats);
+
+/* OVERALL */
+function loadOverall(){
+ let total=data.reduce((s,x)=>s+x.amount,0);
+ animate(overallTotal,total);
+}
+
+function loadOverallMonth(){
+ let m=overallMonth.value;
+ let filtered=data.filter(x=>x.date.startsWith(m));
+ let total=filtered.reduce((s,x)=>s+x.amount,0);
+
+ animate(monthTotal,total);
+ monthLabel.innerText=formatMonth(m);
+
+ overallList.innerHTML="";
+ filtered.forEach(x=>{
+  overallList.innerHTML+=`
+   <div class="swipe-content">
+    <div>${x.person}<br><small>${x.date}</small></div>
+    <div>₹ ${x.amount}</div>
+   </div>`;
+ });
+}
+
+overallMonth.addEventListener("change",loadOverallMonth);
+
+/* NAV */
+function show(s,btn){
+ document.querySelectorAll(".nav button").forEach(b=>b.classList.remove("active"));
+ btn.classList.add("active");
+
+ home.classList.add("hidden");
+ stats.classList.add("hidden");
+ overall.classList.add("hidden");
+
+ if(s==="home"){home.classList.remove("hidden");render();}
+ if(s==="stats"){stats.classList.remove("hidden");loadStats();}
+ if(s==="overall"){overall.classList.remove("hidden");loadOverall();loadOverallMonth();}
+}
+
+/* INIT */
+date.valueAsDate=new Date();
+month.value=new Date().toISOString().slice(0,7);
+overallMonth.value=month.value;
+
+render();
+</script>
+
+</body>
+</html>
