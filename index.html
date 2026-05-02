@@ -475,6 +475,61 @@ function show(s,btn){
  if(s==="overall"){overall.classList.remove("hidden");loadOverall();loadOverallMonth();}
 }
 
+
+function exportCSV(){
+ let csv = "Person,Amount,Date\n";
+
+ data.forEach(x=>{
+  csv += `${x.person},${x.amount},${x.date}\n`;
+ });
+
+ let blob = new Blob([csv], { type: 'text/csv' });
+ let url = URL.createObjectURL(blob);
+
+ let a = document.createElement("a");
+ a.href = url;
+ a.download = "expenses.csv";
+ a.click();
+ 
+ if(data.length===0){
+ alert("No data to export");
+ return;
+}
+}
+
+function backup(){
+ let blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+ let url = URL.createObjectURL(blob);
+
+ let a = document.createElement("a");
+ a.href = url;
+ a.download = "expense-backup.json";
+ a.click();
+}
+
+function importData(event){
+ let file = event.target.files[0];
+ if(!file) return;
+
+ let reader = new FileReader();
+ reader.onload = function(e){
+  try{
+   let imported = JSON.parse(e.target.result);
+   if(Array.isArray(imported)){
+     data = imported;
+     saveAll();
+     render();
+     alert("Data imported successfully");
+   }else{
+     alert("Invalid file");
+   }
+  }catch{
+   alert("Error reading file");
+  }
+ };
+ reader.readAsText(file);
+}
+
 /* INIT */
 date.valueAsDate=new Date();
 month.value=new Date().toISOString().slice(0,7);
