@@ -12,7 +12,7 @@
 <style>
 *{box-sizing:border-box;}
 body{margin:0;font-family:-apple-system;background:#f2f4f7;}
-.container{max-width:500px;margin:auto;padding:16px;padding-bottom:180px;}
+.container{max-width:500px;margin:auto;padding:16px;padding-bottom:110px;}
 
 .card{
  background:white;
@@ -94,22 +94,34 @@ button{
  margin-top:14px;
  border:none;
  border-radius:14px;
- background:#007AFF;
+ background:linear-gradient(135deg,#007AFF,#5AC8FA);
  color:white;
  font-weight:600;
  font-size:16px;
 }
+button:active{
+ transform:scale(0.97);
+}
 
 .nav{
- position:fixed;bottom:0;width:100%;max-width:500px;
- left:50%;transform:translateX(-50%);
- display:flex;background:white;border-top:1px solid #eee;
- padding-bottom:calc(12px + env(safe-area-inset-bottom));
- box-shadow:0 -6px 20px rgba(0,0,0,0.08); 
- border-top:none; 
+ position:fixed;
+ bottom:12px;
+ width:90%;
+ max-width:460px;
+ left:50%;
+ transform:translateX(-50%);
+ display:flex;
+ background:rgba(255,255,255,0.7);
+ backdrop-filter:blur(12px);
+ border-radius:20px;
+ box-shadow:0 8px 24px rgba(0,0,0,0.12);
 }
-.nav button{flex:1;background:none;color:#007AFF;}
-.nav .active{font-weight:700;border-top:3px solid #007AFF;}
+.nav button{flex:1;background:none;color:#007AFF;margin-top:2px;margin-bottom:4px;}
+.nav .active{
+ font-weight:700;
+ background:rgba(0,122,255,0.12);
+ border-radius:12px;
+}
 
 .hidden{display:none;}
 
@@ -145,6 +157,7 @@ button{
  align-items:center;
  justify-content:center;
  min-width:24px;
+ transition:transform 0.3s ease;   /* 🔥 add this */
 }
 .list-header{
  font-size:16px;
@@ -153,6 +166,11 @@ button{
  display:flex;
  align-items:center;
  font-size:16px;
+}
+
+#listWrapper{
+ overflow:hidden;
+ transition:max-height 0.3s ease;
 }
 
 .swipe-container{position:relative;margin-top:10px;overflow:hidden;}
@@ -317,7 +335,14 @@ function render(){
  let m=new Date().toISOString().slice(0,7);
  list.innerHTML="";
 
- data.filter(x=>x.date.startsWith(m)).reverse().forEach(x=>{
+ let filtered = data.filter(x=>x.date.startsWith(m));
+
+if(filtered.length===0){
+ list.innerHTML = "<div style='text-align:center;padding:20px;color:#888;'>No transactions yet</div>";
+ return;
+}
+
+filtered.reverse().forEach(x=>{
   let c=document.createElement("div");
   c.className="swipe-container";
 
@@ -366,9 +391,18 @@ function render(){
 let expanded=localStorage.getItem("list")!=="closed";
 function toggleList(){
  expanded=!expanded;
+
+ if(expanded){
+   listWrapper.style.maxHeight = listWrapper.scrollHeight + "px";
+   arrow.innerText="▼";
+   arrow.style.transform = "rotate(0deg)";     /* 🔥 add */
+ } else {
+   listWrapper.style.maxHeight = "0px";
+   arrow.innerText="►";
+   arrow.style.transform = "rotate(-90deg)";   /* 🔥 add */
+ }
+
  localStorage.setItem("list",expanded?"open":"closed");
- listWrapper.style.display=expanded?"block":"none";
- arrow.innerText=expanded?"▼":"►";
 }
 toggleList();
 
@@ -477,6 +511,11 @@ function show(s,btn){
 
 
 function exportCSV(){
+ if(data.length===0){
+  alert("No data to export");
+  return;
+ }
+
  let csv = "Person,Amount,Date\n";
 
  data.forEach(x=>{
@@ -490,11 +529,6 @@ function exportCSV(){
  a.href = url;
  a.download = "expenses.csv";
  a.click();
- 
- if(data.length===0){
- alert("No data to export");
- return;
-}
 }
 
 function backup(){
@@ -529,6 +563,8 @@ function importData(event){
  };
  reader.readAsText(file);
 }
+
+
 
 /* INIT */
 date.valueAsDate=new Date();
